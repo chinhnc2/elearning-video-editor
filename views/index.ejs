@@ -4,13 +4,39 @@
   <meta content="utf-8" http-equiv="encoding">
   <meta name="viewport" content="width=device-width, user-scalable=no">
   <link rel="icon" type="image/png" href="favicon.png" />
-  <link rel="stylesheet" href="reset.css">
+  <!-- <link rel="stylesheet" href="reset.css"> -->
   <link rel="stylesheet" href="style.css">
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
   <title>Video Editor</title>
 </head>
 <body>
+  <div id="loader">
+    <div class="mb-2 d-flex align-items-center">
+      <div class="spinner-grow text-secondary" role="status">
+        <span class="sr-only"></span>
+      </div>
+      <p class="mb-0 ms-2 text-white">
+        Setting up project, please wait...
+      </p>
+    </div>
+    <div class="progress w-50">
+      <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100"></div>
+    </div>
+  </div>
+  <div id="exporter">
+    <div class="mb-2 d-flex align-items-center">
+      <div class="spinner-grow text-secondary" role="status">
+        <span class="sr-only"></span>
+      </div>
+      <p class="mb-0 ms-2 text-white">
+        Exporting video, please patient...
+      </p>
+    </div>
+    <div class="progress w-50">
+      <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100"></div>
+    </div>
+  </div>
   <div id="background" class="full">
     refresh if visible (javascript didn't load)
     <input type="file" id="filepicker" multiple accept="video/mp4,video/x-m4v,video/*,image/*"/>
@@ -38,6 +64,7 @@
     </div>
     <div id="time"></div>
   </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qs/6.10.3/qs.min.js" integrity="sha512-juaCj8zi594KHQqb92foyp87mCSriYjw3BcTHaXsAn4pEB1YWh+z+XQScMxIxzsjfM4BeVFV3Ij113lIjWiC2w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" crossorigin="anonymous"></script>
   <script type="text/javascript" src="script.js"></script>
   <!-- <script>

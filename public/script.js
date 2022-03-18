@@ -3,6 +3,10 @@ function backgroundElem(elem) {
   bg.appendChild(elem);
 }
 
+const UPDATE_VPATH_API_URL = 'https://lms-dev-api.growthcollege.jp/api/v1/admin/course/course-file/update-file-edit-path'
+const UPDATE_LPATH_API_URL = 'https://lms-dev-api.growthcollege.jp/api/v1/admin/course/course-file/update-layer-path'
+const PRESIGNED_API_URL = 'https://lms-dev-api.growthcollege.jp/api/v1/file/pre-signed'
+
 const dpr = window.devicePixelRatio || 1;
 let fps = 24;
 let max_size = 4000 * 1e6 / 4; // 4GB max
@@ -65,23 +69,45 @@ function updateSettings() {
   popup(settings.div);
 }
 
-function exportToJson() {
-  var xhr = new XMLHttpRequest();
-  const date = new Date().getTime();
-  const str = date + "_" + Math.floor(Math.random() * 1000) + ".json";
-  const url = "https://jott.live/save/note/"+ str + "/mebm";
-  xhr.open("POST", url, true);
-  xhr.setRequestHeader('Content-Type', 'application/json');
-  xhr.send(JSON.stringify({
-    note: player.dumpToJson()
-  }));
-  let uri = encodeURIComponent("https://jott.live/raw/" + str);
-  let mebm_url = window.location + "#" + uri;
+async function exportToJson() {
+  const name = new Date().getTime(); + "_" + Math.floor(Math.random() * 1000);
+  let metadata = {
+    type: 'json'
+  };
+  const dumpData = player.dumpToJson()
+  let file = new File([dumpData], name, metadata);
+  const fileList = [{ fileName: file.name, fileType: 'json' }]
+  const response = await fetch(PRESIGNED_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: 'Bearer ' + vData.token
+    },
+    body: JSON.stringify(fileList)
+  })
+  const { data } = await response.json();
+  await fetch(data[0].preSignedURL, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': file.type
+    },
+    body: file
+  })
+  await fetch(`${UPDATE_LPATH_API_URL}/${vData.vid}?url=${data[0].url}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: 'Bearer ' + vData.token
+    }
+  })
+
   const text = document.createElement('div');
   const preamble = document.createElement('span');
   preamble.textContent = "copy the link below to share:";
   const a = document.createElement('a');
-  a.href = mebm_url;
+  a.href = data[0].url;
   a.setAttribute("target", "_blank");
   a.textContent = "[link]";
 
@@ -660,11 +686,14 @@ class VideoLayer extends RenderedLayer {
       }
       this.frames.push(frame);
       this.update_name((100 * i / (d * fps)).toFixed(2) + "%");
+      document.querySelector('#loader .progress-bar').style.width = (100 * i / (d * fps)).toFixed(2) + "%";
+      document.querySelector('#loader .progress-bar').setAttribute('aria-valuenow', (100 * i / (d * fps)).toFixed(2));
     }
     this.ready = true;
     this.video.remove();
     this.video = null;
     this.update_name(name);
+    document.querySelector('#loader').style.display = 'none';
   }
 
   render(ctx_out, ref_time) {
@@ -734,7 +763,7 @@ class AudioLayer extends RenderedLayer {
   }
 
   update_name(name) {
-    this.name = name;
+    this.name = name.split('.')[0] + '.mp3';
     this.description.textContent = "\"" + this.name + "\" [audio]";
   }
 
@@ -751,7 +780,7 @@ class AudioLayer extends RenderedLayer {
     }
     if (!this.started) {
       if (!this.source) {
-        init_audio(ref_time);
+        this.init_audio(ref_time);
       }
       this.source.start(0, time / 1000);
       this.started = true;
@@ -767,6 +796,7 @@ class Player {
     this.layers = [];
     this.selected_layer = null;
     this.onend_callback = null;
+    this.onplaying_callback = null;
     this.update = null;
     this.width = 1280;
     this.height = 720;
@@ -838,6 +868,8 @@ class Player {
         layer = this.add(new TextLayer(layer_d.name));
       } else if (layer_d.type == "ImageLayer") {
         layer = await this.addURI(layer_d.uri);
+      } else if (layer_d.type == "AudioLayer") {
+        continue;
       }
       if (!layer) {
         alert("layer couldn't be processed");
@@ -1280,6 +1312,10 @@ class Player {
     this.onend_callback = callback;
   }
 
+  onplaying(callback) {
+    this.onplaying_callback = callback;
+  }
+
   render(ctx, time, update_preview) {
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     for (let layer of this.layers) {
@@ -1326,9 +1362,14 @@ class Player {
     }
     if (this.playing && this.total_time > 0) {
       this.time += (realtime - this.last_step);
+      if (this.onplaying_callback && this.time < this.total_time) {
+        this.onplaying_callback(this);
+      }
+
       if (this.onend_callback && this.time >= this.total_time) {
         this.onend_callback(this);
         this.onend_callback = null;
+        this.onplaying_callback = null;
       }
       if (this.time >= this.total_time) {
         this.refresh_audio();
@@ -1401,7 +1442,7 @@ class Player {
     let data = await response.blob();
     let file = new File([data], name, metadata);
     file.uri = uri;
-    return this.addFile(file);
+    return this ? this.addFile(file) : player.addFile(file);
   }
 
 }
@@ -1481,28 +1522,19 @@ function popup(text) {
 }
 
 window.addEventListener('load', function() {
-  // traffic public here: https://jott.live/stat?path=/raw/mebm_hit
-  var xhr = new XMLHttpRequest();
-  let url = "https://jott.live/raw/mebm_hit";
-  xhr.open("GET", url, true);
-  xhr.send(null);
-  
   // fix mobile touch
   document.getElementById('layer_holder').addEventListener("touchmove", function (e) {
     e.stopPropagation();
     //e.preventDefault();
   }, { passive: false });
   document.getElementById('export').addEventListener('click', download);
-
-  if (location.hash) {
-    let l = decodeURIComponent(location.hash.substring(1));
-    for (let uri of l.split(',')) {
-      player.addURI(uri);
-    }
-    location.hash = "";
+  let localStorage = window.localStorage;
+  if (location.search) {
+    window.vData = Qs.parse(location.search.slice(1))
+    localStorage.setItem('vData', JSON.stringify(vData))
+    location.href = location.origin;
     return;
   }
-  let localStorage = window.localStorage;
   let seen = localStorage.getItem('_seen');
   if (!seen || false) {
     const text = document.createElement('div');
@@ -1518,6 +1550,11 @@ window.addEventListener('load', function() {
     localStorage.setItem('_seen', 'true');
   }
 
+  window.vData = JSON.parse(localStorage.getItem('vData'));
+  if (vData) {
+    const { vpath, lpath} = vData;
+    player.addURI(lpath || vpath);
+  }
 });
 
 window.onbeforeunload = function() {
@@ -1556,7 +1593,40 @@ function exportVideo(blob) {
       a.download = (new Date()).getTime() + '.' + extension;
       a.textContent = 'download';
     }
-    a.href = vid.src;
+    a.href = 'javascript:void(0)';
+    a.addEventListener('click', async function() {
+      const name = new Date().getTime(); + "_" + Math.floor(Math.random() * 1000);
+      let metadata = {
+        type: 'mp4'
+      };
+      let file = new File([blob], name, metadata);
+      const fileList = [{ fileName: file.name, fileType: 'mp4' }]
+      const response = await fetch(PRESIGNED_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: 'Bearer ' + vData.token
+        },
+        body: JSON.stringify(fileList)
+      })
+      const { data } = await response.json();
+      await fetch(data[0].preSignedURL, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type
+        },
+        body: file
+      })
+      await fetch(`${UPDATE_VPATH_API_URL}/${vData.vid}?url=${data[0].url}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: 'Bearer ' + vData.token
+        }
+      })
+    })
     document.getElementById('header').appendChild(a);
   }
   vid.ontimeupdate = function() {
@@ -1566,7 +1636,7 @@ function exportVideo(blob) {
     make_a();
     vid.currentTime = 0;
   }
-  make_a();
+  // make_a();
   vid.currentTime = Number.MAX_SAFE_INTEGER;
 }
 
@@ -1690,11 +1760,17 @@ function download(ev) {
   player.time = 0;
   player.play();
   rec.start();
+  player.onplaying(function(p) {
+    document.querySelector('#exporter').style.display = 'flex';
+    document.querySelector('#exporter .progress-bar').style.width = (100 * player.time / player.total_time).toFixed(2) + "%";
+    document.querySelector('#exporter .progress-bar').setAttribute('aria-valuenow', (100 * player.time / player.total_time).toFixed(2));
+  });
   player.onend(function(p) {
     rec.stop();
     player.audio_dest = null;
     e.textContent = e_text;
     player.pause();
     player.time = 0;
+    document.querySelector('#exporter').style.display = 'none';
   });
 }

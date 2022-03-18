@@ -1,17 +1,17 @@
 const express = require('express')
 
 const app = express()
-const port = 3000
+const port = 2001
 
-const { db } = require('./config/fb')
+// const { db } = require('./config/fb')
 
-const docRef = db.collection('users').doc('alovelace');
+// const docRef = db.collection('users').doc('alovelace');
 
-docRef.set({
-  first: 'Ada',
-  last: 'Lovelace',
-  born: 1815
-});
+// docRef.set({
+//   first: 'Ada',
+//   last: 'Lovelace',
+//   born: 1815
+// });
 
 
 app.set('view engine', 'ejs');
