@@ -1,3 +1,7 @@
+document.addEventListener('contextmenu', function(e) {
+  e.preventDefault();
+});
+
 function backgroundElem(elem) {
   let bg = document.getElementById('background');
   bg.appendChild(elem);
